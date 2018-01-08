@@ -1,18 +1,11 @@
 /*
- * cctlx.c
+ * demo_output.c
  *
- *  Created on: 2018年1月3日
+ *  Created on: 2018年1月7日
  *      Author: meng4
  */
-/**
- * TACCRx 捕获-比较寄存器
- *  TACCRx存放设定的计数值，设定范围为0 ~ 65535 (0xffff)。
- *  在比较模式，当计数器TAR中的值，达到TACCRx的设定值，会触发以下动作
- *     设置内部信号EQUx
- *     设置CCIFGx位，并请求捕获-比较中断
- *     输出信号OUTx根据设定改变
- *
- * TACCRx 捕获-比较控制寄存器
+ /**
+ *  TACCRx 捕获-比较控制寄存器
  *  |  15 14   |  13 12 | 11 |  10  | 9 |  8  |  7 6 5  |  4  |  3  |  2  |  1  |  0  |
  *  | CAPTMOD  | CCISI  | SCS| SCCIx|   | CAP | OUTMOD  |CCIE | CCI | OUT | COV |CCIF |
  *  TimerA有多个捕获比较通道，每个通道都有自己的控制寄存器CCTLX。
@@ -44,57 +37,94 @@
  *
  *	置位(mode 1)和复位(mode 5): 置位将输出状态变为1， 复位将输出状态变为0
  *
- *  复位-置位(mode 7)和置位-复位(mode 3): 当TAR的值达到TACCRx的设定值，执行第一个动作；
+ *  复位-置位(mode 7)和置位-复位(mode 3): 在增模式下，当TAR的值达到TACCRx的设定值，执行第一个动作；
  *   当TAR的值重新回到0，执行第二个动作。
  *
- *  反转-复位(mode 2)和反转-置位(mode 6): 当TAR的值达到TACCRx的设定值，执行第一个动作；
+ *  反转-复位(mode 2)和反转-置位(mode 6): 在连续模式下，当TAR的值达到TACCRx的设定值，执行第一个动作；
  *   当TAR的值达到TACCR0的设定值，执行第二个动作。
  *
  * 在TACCRx中，OUT位为输出控制位，只有在输出模式为mode 0有效
  * 	0    输出低电平
  * 	1    输出高电平
- *
- * 在TACCRx中，溢出中断标志位是COV
- *
- * 在TACCRx中，捕获-比较中断标志位是CCIF
- *  捕获模式：寄存器TACCRx捕获了定时器TAR的值置位
- *  比较模式：定时器TAR的值等于寄存器TACCRx的值置位
- *
- * 在TACCRx中，捕获模式通过捕获模式控制位CAPTMOD设定
- *  CAPTMOD1 CAPTMOD0
- *     0        0       禁用捕获模式
- *     0        1       上升沿捕获模式
- *     1        0       下降沿捕获模式
- *     1        1       上升沿下降沿都捕获模式
- *
- * 在TACCRx中，捕获模式输入端的选择通过CCISI位设定
- *  CCIS1 CCIS0
- *    0     0     选择CCIxA输入
- *    0     1     选择CCIxB输入
- *    1     0     选择GND输入
- *    1     1     选择VCC输入
- *  CCIxA可CCIxB来源于定时器模块的外部。
- *   CCIxA连接到外部引脚TAx，而CCIxB连接到MCU内部的其他模块。
- *
- * 在TACCRx中，捕获信号与定时器输入时钟信号是否同步，通过SCS为设定
- *   0   异步捕获
- *   1   同步捕获
- *
  */
-
 #include <msp430.h>
+#include "demo_output.h"
 
-void output_pwm() {
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void Timer_A0() {
+	P1OUT ^= BIT0;
+}
+
+#pragma vector=TIMER0_A1_VECTOR
+__interrupt void Timer_A1() {
+	switch (TAIV) {
+	case 2:
+		CCR1 += 16;
+		break;
+	case 4:
+		CCR2 += 100;
+		break;
+	case 10:
+		P1OUT ^= BIT0;
+		break;
+	}
+}
+
+void demo_output_mode0() {
 	WDTCTL = WDTPW + WDTHOLD;
-	P1DIR |= 0x01;
-	P1SEL |= 0x01;
 
-	CCR0 = 1000 - 1;
+	P1DIR |= BIT0 + BIT1 + BIT2 + BIT3;
+	P1SEL |= BIT1 + BIT2 + BIT3;
 
-	CCTL1 = OUTMOD_7;
-	CCR1 = 300;
+	CCTL0 = OUTMOD_4 + CCIE;
+	CCTL1 = OUTMOD_4 + CCIE;
+	CCTL2 = OUTMOD_4 + CCIE;
 
-	TACTL = TASSEL_1 + MC_1;
+	TACTL = TASSEL_1 + MC_2 + TAIE;
 
 	__bis_SR_register(LPM3_bits);
+}
+
+void demo_output_mode4() {
+	WDTCTL = WDTPW + WDTHOLD;
+	P1DIR |= BIT0;
+	P1DIR |= BIT1;
+	P1SEL |= BIT1;
+
+	CCTL0 = OUTMOD_4;
+
+	TACTL = TASSEL_1 + MC_2 + TAIE;
+
+	__bis_SR_register(LPM3_bits);
+}
+
+void demo_output_mode7() {
+	WDTCTL = WDTPW + WDTHOLD;
+	P1DIR |= BIT0;
+	P1DIR |= BIT2;
+	P1SEL |= BIT2;
+
+	CCR0 = 0xFFFF >> 1;
+	CCTL1 = OUTMOD_7;
+	CCR1 = 0xFFFF >> 3;
+
+	TACTL = TASSEL_1 + MC_1 + TAIE;
+
+	__bis_SR_register(LPM3_bits + GIE);
+}
+
+void demo_output_mode3() {
+	WDTCTL = WDTPW + WDTHOLD;
+		P1DIR |= BIT0;
+		P1DIR |= BIT2;
+		P1SEL |= BIT2;
+
+		CCTL0 = CCIE;
+		CCR0 = 0xFFFF >> 1;
+		CCTL1 = OUTMOD_3;
+		CCR1 = 0xFFFF >> 3;
+
+		TACTL = TASSEL_1 + MC_3 + TAIE;
+
+		__bis_SR_register(LPM0_bits + GIE);
 }

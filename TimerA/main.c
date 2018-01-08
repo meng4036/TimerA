@@ -12,18 +12,21 @@
  */
 
 #include <msp430.h> 
+#include "demo_overflow.h"
+#include "demo_interrupt.h"
+#include "demo_output.h"
+//#include "cctlx.h"
 
-//#include "demo_contmode.h"
-//#include "demo_upmode.h"
-//#include "demo_overflow.h"
-#include "cctlx.h"
+#define _DEMO_OUTPUT_MODE
 
-int main(void)
+int main()
 {
-	//demo_overflow();
-	//cctl_ccr();
-	output_pwm();
+	//up_mode_overflow();
+	//cont_mode_overflow();
+	//updown_mode_overflow();
+
+	//demo_CCR1_interrupt();
+	//demo_output_mode4();
+	//demo_output_mode7();
+	demo_output_mode3();
 }
-
-
-
